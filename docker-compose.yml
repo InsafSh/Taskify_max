@@ -1,0 +1,62 @@
+﻿version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: taskmaster-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - taskmaster_network
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskmaster-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+      - ./backend/cache:/app/cache
+      - ./backend/temp:/app/temp
+    environment:
+      - WHISPER_MODEL=small
+      - DATABASE_URL=sqlite:///./data/taskmaster.db
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:1.5b
+      - PYTHONUNBUFFERED=1
+    networks:
+      - taskmaster_network
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskmaster-frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - taskmaster_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+
+networks:
+  taskmaster_network:
+    driver: bridge
+
+volumes:
+  ollama_data:
+    driver: local
